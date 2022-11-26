@@ -1,0 +1,372 @@
+#run and sleep times
+substitutions:
+  run_time: 1min #can be as long as needed to get data 
+  sleep_time: 20min # normal sleep time
+  night_sleep_time: 7h # 1st sleep time after midnight
+
+esphome:
+  name: esphome-web-399610
+
+esp32:
+  board: esp32dev
+  framework:
+    type: arduino
+
+# Enable logging
+logger:
+
+# Enable Home Assistant API
+api:
+  
+deep_sleep:
+  run_duration: ${run_time} 
+  sleep_duration: ${sleep_time}
+  id: deep_sleep_1
+  esp32_ext1_wakeup:
+    pins: GPIO39
+    mode: ALL_LOW
+
+ota:
+
+wifi:
+  ssid: !secret wifi_ssid
+  password: !secret wifi_password
+
+  # Enable fallback hotspot (captive portal) in case wifi connection fails
+  ap:
+    ssid: "Esphome-Web-399610"
+    password: !secret fallback_password
+
+captive_portal:
+
+external_components:
+  - source: github://ashald/esphome@lilygo-t5-47
+    components:
+      - lilygo_t5_47
+
+sensor:
+    #Kinderzimmer
+  - platform: homeassistant
+    entity_id: sensor.fritz_schalter_kinderzimmer_temperature
+    id: temp_kinder
+    internal: true
+  - platform: homeassistant
+    entity_id: sensor.fritz_schalter_kinderzimmer_humidity
+    id: hum_kinder
+    internal: true
+  - platform: homeassistant
+    entity_id: sensor.kinderzimmer_co2
+    id: co2_kinder
+    internal: true
+    #Schlafzimmer
+  - platform: homeassistant
+    entity_id: sensor.schlafzimmer_temperature
+    id: temp_schlafz
+    internal: true
+  - platform: homeassistant
+    entity_id: sensor.schlafzimmer_humidity
+    id: hum_schlafz
+    internal: true
+  - platform: homeassistant
+    entity_id: sensor.schlafzimmer_co2
+    id: co2_schlafz
+    internal: true
+    #Wohnzimmer
+  - platform: homeassistant
+    entity_id: sensor.wohnzimmer_temperature
+    id: temp_wohnz
+    internal: true
+  - platform: homeassistant
+    entity_id: sensor.wohnzimmer_humidity
+    id: hum_wohnz
+    internal: true
+  - platform: homeassistant
+    entity_id: sensor.wohnzimmer_co2
+    id: co2_wohnz
+    internal: true
+    #Kueche
+  - platform: homeassistant
+    entity_id: sensor.kueche_temperature
+    id: temp_kueche
+    internal: true
+  - platform: homeassistant
+    entity_id: sensor.kueche_humidity
+    id: hum_kueche
+    internal: true
+  - platform: homeassistant
+    entity_id: sensor.kueche_co2
+    id: co2_kueche
+    internal: true
+    #Bad
+  - platform: homeassistant
+    entity_id: sensor.bad_temp_humi_temperature
+    id: temp_bad
+    internal: true
+  - platform: homeassistant
+    entity_id: sensor.bad_temp_humi_humidity
+    id: hum_bad
+    internal: true
+    #Balkon
+  - platform: homeassistant
+    entity_id: sensor.balkon_temperature
+    id: temp_balkon
+    internal: true
+  - platform: homeassistant
+    entity_id: sensor.balkon_humidity
+    id: hum_balkon
+    internal: true
+    #Misc
+  - platform: homeassistant
+    entity_id: sensor.electricity_price_maria_lehner_str_4
+    id: kwh_cost
+    internal: true
+    #refresh
+    on_value: # Actions to perform once data for the last sensor has been received
+      then:
+        - script.execute: all_data_received
+script:
+  - id: all_data_received
+    then:
+      - component.update: t5_display
+      - script.execute: enter_sleep     
+
+  - id: enter_sleep
+    then:
+      - if:
+          condition:
+            lambda: |- 
+              auto time = id(ntp).now();
+              if (!time.is_valid()) { 
+                return false;
+              }
+              return (time.hour < 6); 
+          then:
+            - logger.log: "It's nighttime, entering long sleep for ${night_sleep_time}"          
+            - deep_sleep.enter: 
+                id: deep_sleep_1 
+                sleep_duration: ${night_sleep_time}
+          else:
+            - logger.log: "It's daytime, entering short sleep for ${sleep_time}"             
+            - deep_sleep.enter: 
+                id: deep_sleep_1 
+                sleep_duration: ${sleep_time}
+
+time:
+  - platform: homeassistant
+    id: ntp
+
+font:
+    - file: "gfonts://Play"
+      id: font_large
+      size: 100
+    - file: "gfonts://Play"
+      id: font_mid
+      size: 80
+    - file: "gfonts://Play"
+      id: font_small
+      size: 30
+    - file: "gfonts://Play"
+      id: font_extra_small
+      size: 25
+      #https://pictogrammers.github.io/@mdi/font/7.0.96/
+    - file: 'fonts/materialdesignicons-webfont.ttf'
+      id: font_icons_small
+      size: 65
+      glyphs:
+       # other icons
+      - "\U000F0FD1" # schlafz  
+      - "\U000F0099" # schlafz2
+      - "\U000F156D" # wohnz
+      - "\U000F09A0" # bad
+      - "\U000F0BAD" # kinderzimmer
+      - "\U000F07EA" # kueche
+      - "\U000F0E67" # balkon  
+      - "\U000F06D5" # blitz
+    - file: 'fonts/materialdesignicons-webfont.ttf'
+      id: font_icons_extra_small
+      size: 40
+      glyphs:
+       # other icons
+      - "\U000F05D6" # warnung 
+      - "\U000F11DC" # fenster auf
+
+display:
+  - platform: lilygo_t5_47
+    id: t5_display
+    update_interval: never
+    full_update_every: 6
+    lambda: |-
+      //icons
+      #define ICON_sofa             "\U000F156D"
+      #define ICON_shower           "\U000F09A0"
+      #define ICON_cottage          "\U000F104D"
+      #define ICON_kinderzimmer     "\U000F0BAD"
+      #define ICON_schlafzimmer     "\U000F0FD1"
+      #define ICON_schlafzimmer2    "\U000F0099"
+      #define ICON_kueche           "\U000F07EA"
+      #define ICON_balkon           "\U000F0E67"
+      #define ICON_blitz            "\U000F06D5"  
+      #define ICON_alert            "\U000F05D6"
+      //posititions
+      #define xRes 960
+      #define yRes 540
+      #define xCenter (xRes/2) // X position center
+      #define pad 10
+      #define celsiusSuperscript 12
+      #define temperatureCol 260
+      #define humidityCol 420
+      #define co2Col 630
+      #define warnCol 690
+      #define warnCol2 445
+      
+      // helper variables
+      int y = 0;
+      // threshold for warning icons
+      int th_hum = 60;
+      int th_co2 = 1200;
+
+      //Kinderzimmer
+      y = 65;
+      it.printf(pad, y, id(font_icons_small), TextAlign::BASELINE_LEFT, ICON_kinderzimmer); 
+      if (!isnan(id(temp_kinder).state)) {
+        it.printf(temperatureCol, y, id(font_mid), TextAlign::BASELINE_RIGHT, "%.1f", id(temp_kinder).state);
+        it.printf(temperatureCol, y - celsiusSuperscript, id(font_small), TextAlign::BASELINE_LEFT, "°C");
+      }    
+      if (!isnan(id(hum_kinder).state)) {
+        it.printf(humidityCol, y, id(font_mid), TextAlign::BASELINE_RIGHT, "%.0f", id(hum_kinder).state);
+        it.printf(humidityCol, y - celsiusSuperscript, id(font_small), TextAlign::BASELINE_LEFT, "%%");
+      }   
+      if (!isnan(id(co2_kinder).state)) {
+        it.printf(co2Col, y, id(font_mid), TextAlign::BASELINE_RIGHT, "%.0f", id(co2_kinder).state);
+        it.printf(co2Col, y, id(font_small), TextAlign::BASELINE_LEFT, "ppm");
+      }
+
+      //Warning
+      if (id(hum_kinder).state > th_hum) {
+      it.printf(warnCol, y - celsiusSuperscript, id(font_icons_extra_small), TextAlign::BASELINE_LEFT, ICON_alert);}
+      if (id(co2_kinder).state > th_co2) {
+      it.printf(warnCol, y - celsiusSuperscript, id(font_icons_extra_small), TextAlign::BASELINE_LEFT, ICON_alert);}
+
+      //draw a line
+      it.line(pad, y+15, pad+680, y+15);
+      
+      //Schlafzimmer
+      y = 150;
+      it.printf(pad, y, id(font_icons_small), TextAlign::BASELINE_LEFT, ICON_schlafzimmer2); 
+      if (!isnan(id(temp_schlafz).state)) {
+        it.printf(temperatureCol, y, id(font_mid), TextAlign::BASELINE_RIGHT, "%.1f", id(temp_schlafz).state);
+        it.printf(temperatureCol, y - celsiusSuperscript, id(font_small), TextAlign::BASELINE_LEFT, "°C");
+      }          
+      if (!isnan(id(hum_schlafz).state)) {
+        it.printf(humidityCol, y, id(font_mid), TextAlign::BASELINE_RIGHT, "%.0f", id(hum_schlafz).state);
+        it.printf(humidityCol, y - celsiusSuperscript, id(font_small), TextAlign::BASELINE_LEFT, "%%");
+      }   
+      if (!isnan(id(co2_schlafz).state)) {
+        it.printf(co2Col, y, id(font_mid), TextAlign::BASELINE_RIGHT, "%.0f", id(co2_schlafz).state);
+        it.printf(co2Col, y, id(font_small), TextAlign::BASELINE_LEFT, "ppm");
+      }
+
+      //Warning
+      if (id(hum_schlafz).state > th_hum) {
+      it.printf(warnCol, y - celsiusSuperscript, id(font_icons_extra_small), TextAlign::BASELINE_LEFT, ICON_alert);}
+      if (id(co2_schlafz).state > th_co2) {
+      it.printf(warnCol, y - celsiusSuperscript, id(font_icons_extra_small), TextAlign::BASELINE_LEFT, ICON_alert);}
+
+      //draw a line
+      it.line(pad, y+15, pad+680, y+15);
+
+      //Wohnzimmer
+      y = 235;
+      it.printf(pad, y, id(font_icons_small), TextAlign::BASELINE_LEFT, ICON_sofa); 
+      if (!isnan(id(temp_wohnz).state)) {
+        it.printf(temperatureCol, y, id(font_mid), TextAlign::BASELINE_RIGHT, "%.1f", id(temp_wohnz).state);
+        it.printf(temperatureCol, y - celsiusSuperscript, id(font_small), TextAlign::BASELINE_LEFT, "°C");
+      }         
+      if (!isnan(id(hum_wohnz).state)) {
+        it.printf(humidityCol, y, id(font_mid), TextAlign::BASELINE_RIGHT, "%.0f", id(hum_wohnz).state);
+        it.printf(humidityCol, y - celsiusSuperscript, id(font_small), TextAlign::BASELINE_LEFT, "%%");
+      }    
+      if (!isnan(id(co2_wohnz).state)) {
+        it.printf(co2Col, y, id(font_mid), TextAlign::BASELINE_RIGHT, "%.0f", id(co2_wohnz).state);
+        it.printf(co2Col, y, id(font_small), TextAlign::BASELINE_LEFT, "ppm");
+      }
+
+      //Warning
+      if (id(hum_wohnz).state > th_hum) {
+      it.printf(warnCol, y - celsiusSuperscript, id(font_icons_extra_small), TextAlign::BASELINE_LEFT, ICON_alert);}
+      if (id(co2_wohnz).state > th_co2) {
+      it.printf(warnCol, y - celsiusSuperscript, id(font_icons_extra_small), TextAlign::BASELINE_LEFT, ICON_alert);}
+
+      //draw a line
+      it.line(pad, y+15, pad+680, y+15);
+
+      //Kueche
+      y = 320;
+      it.printf(pad, y, id(font_icons_small), TextAlign::BASELINE_LEFT, ICON_kueche); 
+      if (!isnan(id(temp_kueche).state)) {
+        it.printf(temperatureCol, y, id(font_mid), TextAlign::BASELINE_RIGHT, "%.1f", id(temp_kueche).state);
+        it.printf(temperatureCol, y - celsiusSuperscript, id(font_small), TextAlign::BASELINE_LEFT, "°C");
+      }           
+      if (!isnan(id(hum_kueche).state)) {
+        it.printf(humidityCol, y, id(font_mid), TextAlign::BASELINE_RIGHT, "%.0f", id(hum_kueche).state);
+        it.printf(humidityCol, y - celsiusSuperscript, id(font_small), TextAlign::BASELINE_LEFT, "%%");
+      }     
+      if (!isnan(id(co2_kueche).state)) {
+        it.printf(co2Col, y, id(font_mid), TextAlign::BASELINE_RIGHT, "%.0f", id(co2_kueche).state);
+        it.printf(co2Col, y, id(font_small), TextAlign::BASELINE_LEFT, "ppm");
+      }
+
+      //Warning
+      if (id(hum_kueche).state > th_hum) {
+      it.printf(warnCol, y - celsiusSuperscript, id(font_icons_extra_small), TextAlign::BASELINE_LEFT, ICON_alert);}
+      if (id(co2_kueche).state > th_co2) {
+      it.printf(warnCol, y - celsiusSuperscript, id(font_icons_extra_small), TextAlign::BASELINE_LEFT, ICON_alert);}
+
+      //draw a line
+      it.line(pad, y+15, pad+680, y+15);
+
+      //Bad
+      y = 405;
+      it.printf(pad, y, id(font_icons_small), TextAlign::BASELINE_LEFT, ICON_shower); 
+      if (!isnan(id(temp_bad).state)) {
+        it.printf(temperatureCol, y, id(font_mid), TextAlign::BASELINE_RIGHT, "%.1f", id(temp_bad).state);
+        it.printf(temperatureCol, y - celsiusSuperscript, id(font_small), TextAlign::BASELINE_LEFT, "°C");
+      }           
+      if (!isnan(id(hum_bad).state)) {
+        it.printf(humidityCol, y, id(font_mid), TextAlign::BASELINE_RIGHT, "%.0f", id(hum_bad).state);
+        it.printf(humidityCol, y - celsiusSuperscript, id(font_small), TextAlign::BASELINE_LEFT, "%%");
+      }
+
+      //Warning
+      if (id(hum_bad).state > th_hum) {
+      it.printf(warnCol2, y - celsiusSuperscript, id(font_icons_extra_small), TextAlign::BASELINE_LEFT, ICON_alert);}
+
+      //draw a line
+      it.line(pad, y+15, pad+425, y+15);
+
+      //Balkon
+      y = 490;
+      it.printf(pad, y, id(font_icons_small), TextAlign::BASELINE_LEFT, ICON_balkon); 
+      if (!isnan(id(temp_balkon).state)) {
+        it.printf(temperatureCol, y, id(font_mid), TextAlign::BASELINE_RIGHT, "%.1f", id(temp_balkon).state);
+        it.printf(temperatureCol, y - celsiusSuperscript, id(font_small), TextAlign::BASELINE_LEFT, "°C");
+      }           
+      if (!isnan(id(hum_balkon).state)) {
+        it.printf(humidityCol, y, id(font_mid), TextAlign::BASELINE_RIGHT, "%.0f", id(hum_balkon).state);
+        it.printf(humidityCol, y - celsiusSuperscript, id(font_small), TextAlign::BASELINE_LEFT, "%%");
+      }
+
+      //Warning
+      if (id(temp_balkon).state < 0) {
+      it.printf(warnCol2, y - celsiusSuperscript, id(font_icons_extra_small), TextAlign::BASELINE_LEFT, ICON_alert);}
+
+      //kwh current cost
+      y = 480;            
+      if (!isnan(id(kwh_cost).state)) {
+      it.printf(820, y, id(font_large), TextAlign::BASELINE_RIGHT, "%.2f", id(kwh_cost).state);
+      it.printf(820, y - celsiusSuperscript, id(font_small), TextAlign::BASELINE_LEFT, "ct");
+      }
+
+      //last update time
+      y=530;
+      it.strftime(xCenter, y, id(font_extra_small), TextAlign::BASELINE_CENTER, "update %H:%M", id(ntp).now());
